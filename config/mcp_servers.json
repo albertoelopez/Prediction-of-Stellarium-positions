@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "stellarium": {
+      "command": "python",
+      "args": [
+        "/home/darthvader/AI_Projects/astronomy_bible_prophecy/src/mcp_servers/stellarium_server.py"
+      ],
+      "transport": "stdio",
+      "description": "Stellarium planetarium control for visualizing astronomical events"
+    },
+    "scripture": {
+      "command": "python",
+      "args": [
+        "/home/darthvader/AI_Projects/astronomy_bible_prophecy/src/mcp_servers/scripture_server.py"
+      ],
+      "transport": "stdio",
+      "description": "Biblical scripture search with focus on cosmic/celestial prophecies"
+    }
+  }
+}
