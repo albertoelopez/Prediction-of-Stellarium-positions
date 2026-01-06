@@ -65,11 +65,11 @@ PROPHETIC_EVENTS = {
     },
     "joshua_long_day": {
         "description": "Sun stood still over Gibeon, Moon in Valley of Aijalon (Joshua 10:12-13)",
-        "julian_date": 1280869.104,
-        "iso_date": "-1206-10-19T14:30:00",
+        "julian_date": 1280869.083,
+        "iso_date": "-1206-10-30T14:00:00",
         "location": "gibeon",
         "focus_object": "Sun",
-        "notes": "Annular solar eclipse - Sun-Moon separation 0.08° at max. Humphreys theory: Hebrew 'dmm' means 'cease/be silent' (eclipse darkening), not 'stand still'",
+        "notes": "Annular solar eclipse - Oct 30, 1207 BC (proleptic Gregorian). Humphreys theory: Hebrew 'dmm' means 'cease/be silent' (eclipse darkening), not 'stand still'",
     },
 }
 
