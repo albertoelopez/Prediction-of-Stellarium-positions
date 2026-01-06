@@ -3,14 +3,32 @@
 Scripture MCP Server
 Provides semantic search capabilities for Bible verses with focus on prophetic texts.
 Uses ChromaDB with sentence-transformers for finding thematically related passages.
+
+Categorization System:
+- Layered approach: Scholarly sources → Category schema → AI analysis → Transparency
+- Categories: PROPHETIC_SIGN, HISTORICAL_EVENT, CALENDAR_MARKER, METAPHORICAL,
+              WORSHIP_PRAISE, CONDEMNED_PRACTICE, CREATION_ACCOUNT, UNCERTAIN
 """
 
 import json
 import os
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from database.categories import (
+    CelestialCategory,
+    CATEGORY_DESCRIPTIONS,
+    CATEGORIZED_VERSES,
+    get_verses_by_category,
+    get_astronomically_relevant_verses,
+    get_datable_verses,
+    get_high_confidence_verses,
+    format_verse_analysis,
+)
 
 mcp = FastMCP("scripture-prophecy")
 
@@ -422,6 +440,219 @@ Current status:
   - ChromaDB path: {CHROMA_DB_PATH}
   - Pre-loaded verses: {len(COSMIC_VERSES)} cosmic prophecy verses
 """
+
+
+@mcp.tool()
+async def list_categories() -> str:
+    """
+    List all verse categories used to classify celestial passages.
+    Shows which categories are astronomically relevant and can be dated.
+    """
+    lines = ["=== Verse Categories ===\n"]
+    for cat, info in CATEGORY_DESCRIPTIONS.items():
+        lines.append(f"**{info['name']}** ({cat.value})")
+        lines.append(f"  {info['description']}")
+        lines.append(f"  Astronomically Relevant: {info['astronomically_relevant']}")
+        lines.append(f"  Can Be Dated: {info['can_be_dated']}")
+        lines.append(f"  Examples: {', '.join(info['examples'])}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def get_verses_by_category_tool(category: str) -> str:
+    """
+    Get all verses in a specific category.
+
+    category: One of: prophetic_sign, historical_event, calendar_marker,
+              metaphorical, worship_praise, condemned_practice,
+              creation_account, uncertain
+    """
+    try:
+        cat = CelestialCategory(category.lower())
+    except ValueError:
+        available = [c.value for c in CelestialCategory]
+        return f"Invalid category. Available: {', '.join(available)}"
+
+    verses = get_verses_by_category(cat)
+    if not verses:
+        return f"No verses found in category: {category}"
+
+    cat_info = CATEGORY_DESCRIPTIONS[cat]
+    lines = [
+        f"=== {cat_info['name']} ===",
+        f"{cat_info['description']}",
+        f"Astronomically Relevant: {cat_info['astronomically_relevant']}",
+        f"\nVerses ({len(verses)}):\n"
+    ]
+
+    for v in verses:
+        lines.append(f"• {v.reference} (confidence: {v.confidence*100:.0f}%)")
+        lines.append(f"  \"{v.text[:100]}...\"" if len(v.text) > 100 else f"  \"{v.text}\"")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def get_datable_prophecies() -> str:
+    """
+    Get all verses that can potentially be dated and visualized in Stellarium.
+    These are astronomically relevant prophecies with candidate dates.
+    """
+    verses = get_datable_verses()
+
+    lines = [
+        "=== Datable Prophetic Verses ===",
+        "These verses describe celestial events that may correspond to",
+        "specific astronomical phenomena viewable in Stellarium.\n"
+    ]
+
+    for v in verses:
+        cat_name = CATEGORY_DESCRIPTIONS[v.category]['name']
+        lines.append(f"**{v.reference}** [{cat_name}]")
+        lines.append(f"  Confidence: {v.confidence*100:.0f}%")
+        lines.append(f"  Objects: {', '.join(v.celestial_objects)}")
+        lines.append(f"  Candidate Dates:")
+        for date in v.astronomical_date_candidates:
+            lines.append(f"    - {date}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def analyze_verse_detailed(reference: str) -> str:
+    """
+    Get detailed scholarly analysis of a categorized verse.
+    Shows category, reasoning, cross-references, Hebrew/Greek notes,
+    alternative interpretations, and candidate dates for Stellarium.
+
+    reference: Verse reference (e.g., "Joel 2:31", "Revelation 12:1-2")
+    """
+    ref_lower = reference.lower().strip()
+
+    for verse in CATEGORIZED_VERSES:
+        if verse.reference.lower() == ref_lower or ref_lower in verse.reference.lower():
+            return format_verse_analysis(verse)
+
+    available = [v.reference for v in CATEGORIZED_VERSES]
+    return f"Verse not in categorized database.\n\nAvailable verses:\n" + "\n".join(f"  - {r}" for r in available)
+
+
+@mcp.tool()
+async def get_astronomically_relevant() -> str:
+    """
+    Get all verses that are astronomically relevant (not metaphorical or condemned).
+    These are suitable for Stellarium visualization attempts.
+    """
+    verses = get_astronomically_relevant_verses()
+
+    lines = [
+        "=== Astronomically Relevant Verses ===",
+        "These verses describe celestial phenomena that may be literal",
+        "astronomical events (not purely metaphorical or condemned practices).\n"
+    ]
+
+    by_category = {}
+    for v in verses:
+        cat_name = CATEGORY_DESCRIPTIONS[v.category]['name']
+        if cat_name not in by_category:
+            by_category[cat_name] = []
+        by_category[cat_name].append(v)
+
+    for cat_name, cat_verses in by_category.items():
+        lines.append(f"\n**{cat_name}** ({len(cat_verses)} verses):")
+        for v in cat_verses:
+            lines.append(f"  • {v.reference}")
+            lines.append(f"    Objects: {', '.join(v.celestial_objects)}")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def get_condemned_practices() -> str:
+    """
+    Get verses that warn against astrology and star worship.
+    Important for understanding the biblical distinction between
+    astronomy (observing God's signs) and astrology (divination).
+    """
+    verses = get_verses_by_category(CelestialCategory.CONDEMNED_PRACTICE)
+
+    lines = [
+        "=== Biblical Warnings Against Astrology ===",
+        "These verses distinguish forbidden practices (divination, star worship)",
+        "from legitimate observation of celestial signs (Genesis 1:14).\n"
+    ]
+
+    for v in verses:
+        lines.append(f"**{v.reference}**")
+        lines.append(f"  \"{v.text}\"")
+        lines.append(f"  Context: {v.book_context}")
+        if v.hebrew_greek_notes:
+            lines.append(f"  Language Notes: {v.hebrew_greek_notes}")
+        lines.append("")
+
+    lines.append("KEY DISTINCTION:")
+    lines.append("  ✓ Permitted: Observing celestial signs for times/seasons (Gen 1:14)")
+    lines.append("  ✓ Permitted: Recognizing prophetic celestial events (Joel 2:31)")
+    lines.append("  ✗ Forbidden: Worshipping celestial bodies (Deut 4:19)")
+    lines.append("  ✗ Forbidden: Divination/fortune-telling by stars (Isa 47:13)")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def search_by_confidence(min_confidence: float = 0.8) -> str:
+    """
+    Get verses with high categorization confidence.
+    Higher confidence means less scholarly debate about interpretation.
+
+    min_confidence: Minimum confidence threshold (0.0 to 1.0, default 0.8)
+    """
+    verses = get_high_confidence_verses(min_confidence)
+
+    lines = [
+        f"=== High Confidence Verses (≥{min_confidence*100:.0f}%) ===",
+        "These categorizations have strong scholarly consensus.\n"
+    ]
+
+    for v in sorted(verses, key=lambda x: x.confidence, reverse=True):
+        cat_name = CATEGORY_DESCRIPTIONS[v.category]['name']
+        lines.append(f"• {v.reference} ({v.confidence*100:.0f}%) - {cat_name}")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def get_uncertain_verses() -> str:
+    """
+    Get verses where interpretation is debated among scholars.
+    Shows alternative interpretations and confidence levels.
+    """
+    uncertain = get_verses_by_category(CelestialCategory.UNCERTAIN)
+    debated = [v for v in CATEGORIZED_VERSES if v.alternative_categories]
+
+    all_debated = list(set(uncertain + debated))
+
+    lines = [
+        "=== Debated/Uncertain Passages ===",
+        "These verses have multiple valid scholarly interpretations.\n"
+    ]
+
+    for v in all_debated:
+        cat_name = CATEGORY_DESCRIPTIONS[v.category]['name']
+        lines.append(f"**{v.reference}**")
+        lines.append(f"  Primary: {cat_name} ({v.confidence*100:.0f}%)")
+        if v.alternative_categories:
+            lines.append("  Alternatives:")
+            for alt_cat, conf, reason in v.alternative_categories:
+                alt_name = CATEGORY_DESCRIPTIONS[alt_cat]['name']
+                lines.append(f"    - {alt_name} ({conf*100:.0f}%): {reason}")
+        lines.append(f"  Reasoning: {v.reasoning[:150]}...")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
