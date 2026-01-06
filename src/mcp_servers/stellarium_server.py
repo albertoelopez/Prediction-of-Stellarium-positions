@@ -40,11 +40,12 @@ PROPHETIC_EVENTS = {
         "focus_object": "Virgo",
     },
     "star_of_bethlehem_conjunction": {
-        "description": "Jupiter-Regulus conjunction (possible Star of Bethlehem)",
-        "julian_date": 1720692.5,
-        "iso_date": "-0002-09-14T18:00:00",
+        "description": "Jupiter-Venus conjunction (Star of Bethlehem candidate) - planets 0.056° apart",
+        "julian_date": 1720860.33,
+        "iso_date": "-0001-06-17T20:00:00",
         "location": "bethlehem",
         "focus_object": "Jupiter",
+        "notes": "Jupiter and Venus in Leo near Regulus, combined mag -4.55",
     },
     "crucifixion_eclipse": {
         "description": "Darkness during crucifixion (Luke 23:44-45)",
