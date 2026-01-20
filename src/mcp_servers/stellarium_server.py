@@ -12,6 +12,14 @@ from typing import Optional
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+# Skyfield for fast astronomical calculations
+try:
+    from skyfield.api import load
+    from skyfield.framelib import ecliptic_frame
+    SKYFIELD_AVAILABLE = True
+except ImportError:
+    SKYFIELD_AVAILABLE = False
+
 mcp = FastMCP("stellarium-prophecy")
 
 STELLARIUM_BASE_URL = "http://localhost:8090/api"
@@ -31,6 +39,7 @@ BIBLICAL_LOCATIONS = {
     "galilee": {"lat": 32.8331, "lon": 35.5081, "alt": -212, "name": "Sea of Galilee"},
     "gibeon": {"lat": 31.85, "lon": 35.18, "alt": 700, "name": "Gibeon"},
     "aijalon": {"lat": 31.86, "lon": 34.98, "alt": 250, "name": "Valley of Aijalon"},
+    "luxor": {"lat": 25.6872, "lon": 32.6396, "alt": 76, "name": "Luxor, Egypt"},
 }
 
 PROPHETIC_EVENTS = {
@@ -102,6 +111,63 @@ PROPHETIC_EVENTS = {
         "location": "gibeon",
         "focus_object": "Sun",
         "notes": "Annular solar eclipse - Oct 30, 1207 BC (proleptic Gregorian). Humphreys theory: Hebrew 'dmm' means 'cease/be silent' (eclipse darkening), not 'stand still'",
+    },
+    # === FUTURE PROPHETIC EVENTS (2027-2034) ===
+    "eclipse_of_century_2027": {
+        "description": "Eclipse of the Century - Total solar eclipse over Egypt (Joel 2:31)",
+        "julian_date": 2461619.9375,
+        "iso_date": "2027-08-02T10:30:00",
+        "location": "luxor",
+        "focus_object": "Sun",
+        "notes": "Longest total eclipse on accessible land until 2114. 6 min 22 sec totality. Path: Spain-Morocco-Egypt-Saudi Arabia. 'Sun turned to darkness'",
+    },
+    "blood_moon_2032_1": {
+        "description": "Blood Moon Tetrad 2032-2033 - Eclipse #1",
+        "julian_date": 2463135.5,
+        "iso_date": "2032-04-25T12:00:00",
+        "location": "jerusalem",
+        "focus_object": "Moon",
+        "notes": "First of four total lunar eclipses in 2032-2033 tetrad",
+    },
+    "blood_moon_2032_2": {
+        "description": "Blood Moon Tetrad 2032-2033 - Eclipse #2",
+        "julian_date": 2463311.5,
+        "iso_date": "2032-10-18T12:00:00",
+        "location": "jerusalem",
+        "focus_object": "Moon",
+        "notes": "Second of four total lunar eclipses in 2032-2033 tetrad",
+    },
+    "solar_eclipse_2033": {
+        "description": "Total Solar Eclipse during Blood Moon Tetrad",
+        "julian_date": 2463474.5,
+        "iso_date": "2033-03-30T12:00:00",
+        "location": "jerusalem",
+        "focus_object": "Sun",
+        "notes": "Total solar eclipse occurs between blood moons. Path: Russia-Alaska. Not visible from Middle East.",
+    },
+    "blood_moon_passover_2033": {
+        "description": "Blood Moon on Passover - 2000th Anniversary of Crucifixion (Joel 2:31, Acts 2:20)",
+        "julian_date": 2463489.5,
+        "iso_date": "2033-04-14T12:00:00",
+        "location": "jerusalem",
+        "focus_object": "Moon",
+        "notes": "2000 years after April 3, 33 AD crucifixion. Blood moon on Passover. 'Moon turned to blood before the great day of the Lord'",
+    },
+    "blood_moon_sukkot_2033": {
+        "description": "Blood Moon on Sukkot - Feast of Tabernacles (Joel 2:31)",
+        "julian_date": 2463666.5,
+        "iso_date": "2033-10-08T12:00:00",
+        "location": "jerusalem",
+        "focus_object": "Moon",
+        "notes": "Fourth blood moon of tetrad, falls on Sukkot. Completes the 2032-2033 tetrad pattern.",
+    },
+    "eclipse_middle_east_2034": {
+        "description": "Total Solar Eclipse across Middle East (Joel 2:31)",
+        "julian_date": 2463829.5,
+        "iso_date": "2034-03-20T12:00:00",
+        "location": "egypt",
+        "focus_object": "Sun",
+        "notes": "Path crosses Egypt-Saudi Arabia-Kuwait-Iran. 4 min 9 sec totality. 'Sun turned to darkness'",
     },
 }
 
@@ -776,6 +842,501 @@ async def show_daytime_realistic() -> str:
     await toggle_display_option("ecliptic_line", False)
 
     return "Daytime realistic view configured"
+
+
+@mcp.tool()
+async def search_revelation_12_sign(
+    start_year: int,
+    end_year: int,
+    require_all_three_in_leo: bool = True,
+    show_partial: bool = False,
+    check_daily: bool = False
+) -> str:
+    """
+    Search for Revelation 12 sign configurations across a range of years.
+    OPTIMIZED: Only checks ~12 year intervals when Jupiter is in Virgo.
+
+    Criteria:
+    - Sun in Virgo (always true in September)
+    - Jupiter in Virgo (the "child" - ~11.86 year cycle)
+    - Mercury, Venus, Mars in Leo (part of "12 stars" crown)
+
+    start_year: Start of search range (negative for BC, e.g., -10 for 10 BC)
+    end_year: End of search range (e.g., 2017)
+    require_all_three_in_leo: If True, only return full matches
+    show_partial: If True, also show years with 1-2 planets in Leo
+    check_daily: If True, check every 3 days during Sun-in-Virgo period (Aug 23 - Sep 22)
+                 instead of just Sept 23. Slower but more thorough.
+
+    Returns list of matching years with planet positions.
+    """
+    results = []
+    matches = []
+    partial_matches = []
+    jupiter_in_virgo_years = []
+
+    # Jupiter's orbital period is 11.8618 years
+    # 2017 is a known Jupiter-in-Virgo year, work backwards from there
+    JUPITER_PERIOD = 11.8618
+    REFERENCE_YEAR = 2017
+
+    results.append(f"Searching for Rev 12 configurations from {start_year} to {end_year}...")
+    results.append(f"Using optimized ~12 year Jupiter cycle search...")
+    results.append("")
+
+    # Generate candidate years based on Jupiter's cycle
+    # Check reference year and both directions
+    candidate_years = set()
+
+    # Go backwards from reference year
+    year = REFERENCE_YEAR
+    while year >= start_year:
+        if start_year <= year <= end_year:
+            # Add this year and neighbors to catch cycle drift
+            candidate_years.add(int(year))
+            candidate_years.add(int(year) - 1)
+            candidate_years.add(int(year) + 1)
+        year -= JUPITER_PERIOD
+
+    # Go forwards from reference year (in case end_year > 2017)
+    year = REFERENCE_YEAR + JUPITER_PERIOD
+    while year <= end_year:
+        if start_year <= year <= end_year:
+            candidate_years.add(int(year))
+            candidate_years.add(int(year) - 1)
+            candidate_years.add(int(year) + 1)
+        year += JUPITER_PERIOD
+
+    # Filter to range and sort
+    candidate_years = sorted([y for y in candidate_years if start_year <= y <= end_year])
+
+    results.append(f"Checking {len(candidate_years)} candidate years (based on Jupiter's 11.86-year cycle)...")
+    if check_daily:
+        results.append("Daily mode: checking every 3 days from Sep 16 - Oct 28 (Sun in Virgo)")
+    results.append("")
+
+    # Define dates to check
+    # Sun is in constellation Virgo (IAU boundaries) roughly Sep 16 - Oct 30
+    if check_daily:
+        # Sun is in constellation Virgo (IAU) roughly Sep 16 - Oct 30
+        # Check every 3 days through the full period
+        dates_to_check = [
+            (9, 16), (9, 19), (9, 22), (9, 25), (9, 28),
+            (10, 1), (10, 4), (10, 7), (10, 10), (10, 13), (10, 16), (10, 19), (10, 22), (10, 25), (10, 28)
+        ]
+    else:
+        dates_to_check = [(9, 23)]
+
+    for year in candidate_years:
+        year_had_jupiter_in_virgo = False
+        year_best_match = 0
+        year_best_date = None
+        year_best_planets = None
+
+        for month, day in dates_to_check:
+            # Set time to this date
+            jd = gregorian_to_julian(year, month, day, 12.0)
+            await stellarium_request("POST", "main/time", {"time": jd, "timerate": 0})
+
+            # Minimal delay
+            await asyncio.sleep(0.02)
+
+            # Get Jupiter's constellation first (quick filter)
+            jupiter_info = await stellarium_request("GET", "objects/info", {"name": "Jupiter", "format": "json"})
+
+            if not jupiter_info["success"]:
+                continue
+
+            jupiter_const = jupiter_info["data"].get("iauConstellation", "")
+
+            # Only proceed if Jupiter is in Virgo
+            if jupiter_const != "Vir":
+                continue
+
+            year_had_jupiter_in_virgo = True
+
+            # Jupiter is in Virgo - now check Mercury, Venus, Mars
+            planet_consts = {"Jupiter": "Vir"}
+
+            for planet in ["Mercury", "Venus", "Mars"]:
+                info = await stellarium_request("GET", "objects/info", {"name": planet, "format": "json"})
+                if info["success"]:
+                    planet_consts[planet] = info["data"].get("iauConstellation", "???")
+
+            # Count how many are in Leo
+            in_leo = sum(1 for p in ["Mercury", "Venus", "Mars"] if planet_consts.get(p) == "Leo")
+
+            # Track best match for this year
+            if in_leo > year_best_match:
+                year_best_match = in_leo
+                year_best_date = (month, day)
+                year_best_planets = planet_consts.copy()
+
+            # If we found a full match, record it immediately
+            if in_leo == 3:
+                year_str = f"{abs(year)} {'BC' if year < 0 else 'AD'}"
+                date_str = f"{month}/{day}/{year_str}"
+                matches.append({
+                    "year": year,
+                    "year_str": year_str,
+                    "date": date_str,
+                    "month": month,
+                    "day": day,
+                    "planets": planet_consts
+                })
+                results.append(f"★★★ FULL MATCH: {date_str}")
+                results.append(f"    Jupiter: Vir | Mercury: {planet_consts['Mercury']} | Venus: {planet_consts['Venus']} | Mars: {planet_consts['Mars']}")
+                if not check_daily:
+                    break  # Move to next year if not checking daily
+
+        # Record year as having Jupiter in Virgo
+        if year_had_jupiter_in_virgo:
+            jupiter_in_virgo_years.append(year)
+
+        # Record partial matches (best for the year)
+        if year_best_match > 0 and year_best_match < 3:
+            year_str = f"{abs(year)} {'BC' if year < 0 else 'AD'}"
+            if check_daily and year_best_date:
+                date_str = f"{year_best_date[0]}/{year_best_date[1]}/{year_str}"
+            else:
+                date_str = year_str
+
+            if year_best_match >= 2:
+                partial_matches.append({
+                    "year": year,
+                    "year_str": year_str,
+                    "date": date_str,
+                    "planets": year_best_planets,
+                    "in_leo": year_best_match
+                })
+                if show_partial:
+                    results.append(f"  ★★ Close ({year_best_match}/3 in Leo): {date_str}")
+                    results.append(f"    Jupiter: Vir | Mercury: {year_best_planets['Mercury']} | Venus: {year_best_planets['Venus']} | Mars: {year_best_planets['Mars']}")
+            elif year_best_match >= 1 and show_partial:
+                partial_matches.append({
+                    "year": year,
+                    "year_str": year_str,
+                    "date": date_str,
+                    "planets": year_best_planets,
+                    "in_leo": year_best_match
+                })
+                results.append(f"  ★ Partial ({year_best_match}/3 in Leo): {date_str}")
+                results.append(f"    Jupiter: Vir | Mercury: {year_best_planets['Mercury']} | Venus: {year_best_planets['Venus']} | Mars: {year_best_planets['Mars']}")
+
+    results.append("")
+    results.append("=" * 50)
+    results.append("SUMMARY")
+    results.append("=" * 50)
+    results.append(f"Date range: {abs(start_year)} {'BC' if start_year < 0 else 'AD'} to {end_year} AD")
+    results.append(f"Total span: {end_year - start_year + 1} years")
+    results.append(f"Candidate years checked: {len(candidate_years)}")
+    if check_daily:
+        results.append(f"Dates checked per year: {len(dates_to_check)} (every 3 days, Sep 16 - Oct 28)")
+    results.append(f"Years with Jupiter in Virgo: {len(jupiter_in_virgo_years)}")
+    results.append("")
+    results.append(f"FULL MATCHES (Mercury + Venus + Mars ALL in Leo): {len(matches)}")
+
+    if matches:
+        results.append("")
+        if check_daily:
+            results.append("★★★ FULL MATCH DATES:")
+            for m in matches:
+                results.append(f"    {m.get('date', m['year_str'])}")
+        else:
+            results.append("★★★ FULL MATCH YEARS: " + ", ".join(m["year_str"] for m in matches))
+
+    if partial_matches:
+        results.append("")
+        close_matches = [p for p in partial_matches if p['in_leo'] == 2]
+        results.append(f"Close matches (2/3 in Leo): {len(close_matches)}")
+
+    # List Jupiter-in-Virgo years for reference
+    results.append("")
+    results.append(f"All Jupiter-in-Virgo years found: {', '.join(str(y) for y in sorted(set(jupiter_in_virgo_years)))}")
+
+    return "\n".join(results)
+
+
+def get_constellation_from_ecliptic_longitude(lon_degrees: float) -> str:
+    """
+    Approximate constellation from ecliptic longitude.
+    Uses simplified IAU boundaries along the ecliptic.
+    Calibrated against Stellarium for Leo/Virgo/Libra accuracy.
+    """
+    lon = lon_degrees % 360
+
+    # Approximate boundaries (degrees of ecliptic longitude)
+    # Adjusted based on Stellarium verification:
+    # - Virgo/Libra boundary moved from 218° to 214° (Stellarium showed Jupiter in Libra when Skyfield said Virgo)
+    # - Leo/Virgo boundary adjusted to 173°
+    constellations = [
+        (0, 28, "Psc"),      # Pisces
+        (28, 54, "Ari"),     # Aries
+        (54, 90, "Tau"),     # Taurus
+        (90, 118, "Gem"),    # Gemini
+        (118, 138, "Cnc"),   # Cancer
+        (138, 173, "Leo"),   # Leo - KEY for Rev 12 (narrowed)
+        (173, 214, "Vir"),   # Virgo - KEY for Rev 12 (narrowed)
+        (214, 241, "Lib"),   # Libra (expanded)
+        (241, 248, "Sco"),   # Scorpius
+        (248, 266, "Oph"),   # Ophiuchus (crosses ecliptic!)
+        (266, 300, "Sgr"),   # Sagittarius
+        (300, 327, "Cap"),   # Capricornus
+        (327, 352, "Aqr"),   # Aquarius
+        (352, 360, "Psc"),   # Pisces (wraps)
+    ]
+
+    for start, end, name in constellations:
+        if start <= lon < end:
+            return name
+    return "???"
+
+
+@mcp.tool()
+async def search_rev12_fast(
+    start_year: int,
+    end_year: int,
+    show_partial: bool = False
+) -> str:
+    """
+    FAST search for Revelation 12 sign configurations using Skyfield.
+    No Stellarium connection needed - pure astronomical computation.
+
+    Searches the entire date range in seconds instead of minutes.
+
+    start_year: Start of search range (negative for BC, e.g., -10 for 10 BC)
+    end_year: End of search range (e.g., 2017)
+    show_partial: If True, also show years with 2/3 planets in Leo
+
+    Returns list of matching dates with planet positions.
+    """
+    if not SKYFIELD_AVAILABLE:
+        return "Error: Skyfield library not available. Install with: pip install skyfield"
+
+    results = []
+    matches = []
+    partial_matches = []
+
+    results.append(f"FAST SEARCH: Rev 12 configurations from {start_year} to {end_year}")
+    results.append("Using Skyfield for direct astronomical computation...")
+    results.append("")
+
+    # Load ephemeris data - use de422.bsp for extended date range (-3000 to +3000)
+    try:
+        eph = load('de422.bsp')
+    except Exception:
+        # Download if not available (~623 MB, one-time)
+        results.append("Downloading extended ephemeris data (one-time, ~623MB)...")
+        eph = load('de422.bsp')
+
+    earth = eph['earth']
+    sun = eph['sun']
+    jupiter = eph['jupiter barycenter']
+    mercury = eph['mercury']
+    venus = eph['venus']
+    mars = eph['mars barycenter']
+
+    ts = load.timescale()
+
+    # Jupiter's orbital period is 11.8618 years
+    # Generate candidate years based on Jupiter cycle
+    JUPITER_PERIOD = 11.8618
+    REFERENCE_YEAR = 2017
+
+    candidate_years = set()
+    year = REFERENCE_YEAR
+    while year >= start_year:
+        if start_year <= year <= end_year:
+            candidate_years.add(int(year))
+            candidate_years.add(int(year) - 1)
+            candidate_years.add(int(year) + 1)
+        year -= JUPITER_PERIOD
+
+    year = REFERENCE_YEAR + JUPITER_PERIOD
+    while year <= end_year:
+        if start_year <= year <= end_year:
+            candidate_years.add(int(year))
+            candidate_years.add(int(year) - 1)
+            candidate_years.add(int(year) + 1)
+        year += JUPITER_PERIOD
+
+    candidate_years = sorted([y for y in candidate_years if start_year <= y <= end_year])
+
+    # Dates to check (Sun in Virgo: roughly Sep 16 - Oct 30)
+    dates_to_check = [
+        (9, 16), (9, 19), (9, 22), (9, 25), (9, 28),
+        (10, 1), (10, 4), (10, 7), (10, 10), (10, 13),
+        (10, 16), (10, 19), (10, 22), (10, 25), (10, 28)
+    ]
+
+    results.append(f"Checking {len(candidate_years)} candidate years × {len(dates_to_check)} dates...")
+    results.append("")
+
+    jupiter_in_virgo_years = set()
+
+    for year in candidate_years:
+        year_best_match = 0
+        year_best_date = None
+        year_best_planets = None
+        year_had_jupiter_in_virgo = False
+
+        for month, day in dates_to_check:
+            # Handle BC years (Skyfield uses astronomical year numbering)
+            t = ts.utc(year, month, day, 12)
+
+            # Get planet positions in ecliptic coordinates
+            def get_ecliptic_lon(planet):
+                apparent = earth.at(t).observe(planet).apparent()
+                lat, lon, dist = apparent.frame_latlon(ecliptic_frame)
+                return lon.degrees
+
+            sun_lon = get_ecliptic_lon(sun)
+            jupiter_lon = get_ecliptic_lon(jupiter)
+            mercury_lon = get_ecliptic_lon(mercury)
+            venus_lon = get_ecliptic_lon(venus)
+            mars_lon = get_ecliptic_lon(mars)
+
+            # Determine constellations
+            sun_const = get_constellation_from_ecliptic_longitude(sun_lon)
+            jupiter_const = get_constellation_from_ecliptic_longitude(jupiter_lon)
+            mercury_const = get_constellation_from_ecliptic_longitude(mercury_lon)
+            venus_const = get_constellation_from_ecliptic_longitude(venus_lon)
+            mars_const = get_constellation_from_ecliptic_longitude(mars_lon)
+
+            # Check if Jupiter is in Virgo
+            if jupiter_const != "Vir":
+                continue
+
+            year_had_jupiter_in_virgo = True
+
+            # Count planets in Leo
+            planet_consts = {
+                "Jupiter": jupiter_const,
+                "Mercury": mercury_const,
+                "Venus": venus_const,
+                "Mars": mars_const
+            }
+
+            in_leo = sum(1 for p in ["Mercury", "Venus", "Mars"] if planet_consts[p] == "Leo")
+
+            if in_leo > year_best_match:
+                year_best_match = in_leo
+                year_best_date = (month, day)
+                year_best_planets = planet_consts.copy()
+
+            # Record full matches
+            if in_leo == 3:
+                year_str = f"{abs(year)} {'BC' if year < 0 else 'AD'}"
+                date_str = f"{month}/{day}/{year_str}"
+                matches.append({
+                    "year": year,
+                    "year_str": year_str,
+                    "date": date_str,
+                    "month": month,
+                    "day": day,
+                    "planets": planet_consts
+                })
+                results.append(f"★★★ FULL MATCH: {date_str}")
+                results.append(f"    Jupiter: Vir | Mercury: {mercury_const} | Venus: {venus_const} | Mars: {mars_const}")
+
+        if year_had_jupiter_in_virgo:
+            jupiter_in_virgo_years.add(year)
+
+        # Record partial matches (best for the year)
+        if year_best_match == 2 and show_partial:
+            year_str = f"{abs(year)} {'BC' if year < 0 else 'AD'}"
+            date_str = f"{year_best_date[0]}/{year_best_date[1]}/{year_str}" if year_best_date else year_str
+            partial_matches.append({
+                "year": year,
+                "year_str": year_str,
+                "date": date_str,
+                "planets": year_best_planets,
+                "in_leo": year_best_match
+            })
+            results.append(f"  ★★ Close (2/3 in Leo): {date_str}")
+            results.append(f"    Jupiter: Vir | Mercury: {year_best_planets['Mercury']} | Venus: {year_best_planets['Venus']} | Mars: {year_best_planets['Mars']}")
+
+    results.append("")
+    results.append("=" * 50)
+    results.append("SUMMARY")
+    results.append("=" * 50)
+    results.append(f"Date range: {abs(start_year)} {'BC' if start_year < 0 else 'AD'} to {end_year} AD")
+    results.append(f"Total span: {end_year - start_year + 1} years")
+    results.append(f"Candidate years checked: {len(candidate_years)}")
+    results.append(f"Dates checked per year: {len(dates_to_check)}")
+    results.append(f"Years with Jupiter in Virgo: {len(jupiter_in_virgo_years)}")
+    results.append("")
+    results.append(f"FULL MATCHES (Mercury + Venus + Mars ALL in Leo): {len(matches)}")
+
+    if matches:
+        results.append("")
+        results.append("★★★ FULL MATCH DATES:")
+        for m in matches:
+            results.append(f"    {m['date']}")
+
+    if partial_matches:
+        results.append("")
+        results.append(f"Close matches (2/3 in Leo): {len(partial_matches)}")
+
+    results.append("")
+    results.append(f"Jupiter-in-Virgo years: {', '.join(str(y) for y in sorted(jupiter_in_virgo_years))}")
+
+    return "\n".join(results)
+
+
+@mcp.tool()
+async def check_rev12_configuration(year: int, month: int = 9, day: int = 23) -> str:
+    """
+    Check a specific date for Revelation 12 sign configuration.
+
+    Returns positions of Sun, Jupiter, Mercury, Venus, Mars and whether they match Rev 12 criteria.
+
+    year: Year to check (negative for BC)
+    month: Month (default 9 for September)
+    day: Day (default 23)
+    """
+    jd = gregorian_to_julian(year, month, day, 12.0)
+    await stellarium_request("POST", "main/time", {"time": jd, "timerate": 0})
+    await asyncio.sleep(0.1)
+
+    planets = ["Sun", "Jupiter", "Mercury", "Venus", "Mars"]
+    positions = {}
+
+    for planet in planets:
+        info = await stellarium_request("GET", "objects/info", {"name": planet, "format": "json"})
+        if info["success"]:
+            positions[planet] = info["data"].get("iauConstellation", "???")
+        else:
+            positions[planet] = "ERROR"
+
+    year_str = f"{abs(year)} {'BC' if year < 0 else 'AD'}"
+
+    # Check criteria
+    sun_ok = positions["Sun"] == "Vir"
+    jupiter_ok = positions["Jupiter"] == "Vir"
+    mercury_leo = positions["Mercury"] == "Leo"
+    venus_leo = positions["Venus"] == "Leo"
+    mars_leo = positions["Mars"] == "Leo"
+
+    leo_count = sum([mercury_leo, venus_leo, mars_leo])
+
+    result = [f"Rev 12 Check for {month}/{day}/{year_str}:"]
+    result.append("")
+    result.append(f"  Sun:     {positions['Sun']:5} {'✓' if sun_ok else '✗'} (should be Vir)")
+    result.append(f"  Jupiter: {positions['Jupiter']:5} {'✓' if jupiter_ok else '✗'} (should be Vir - the 'child')")
+    result.append(f"  Mercury: {positions['Mercury']:5} {'✓' if mercury_leo else '✗'} (should be Leo)")
+    result.append(f"  Venus:   {positions['Venus']:5} {'✓' if venus_leo else '✗'} (should be Leo)")
+    result.append(f"  Mars:    {positions['Mars']:5} {'✓' if mars_leo else '✗'} (should be Leo)")
+    result.append("")
+
+    if sun_ok and jupiter_ok and leo_count == 3:
+        result.append("✓✓✓ FULL REVELATION 12 MATCH!")
+    elif sun_ok and jupiter_ok:
+        result.append(f"Partial match: {leo_count}/3 planets in Leo")
+    else:
+        result.append("Not a Rev 12 configuration")
+
+    return "\n".join(result)
 
 
 @mcp.tool()
