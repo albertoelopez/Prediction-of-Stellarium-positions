@@ -78,11 +78,15 @@ Dec 2 BC     - Jupiter stationary over Bethlehem (Arrival)
 
 ---
 
-## Crucifixion Darkness (33 AD)
+## Crucifixion Darkness & Blood Moon (33 AD)
 
-**Scripture:** Luke 23:44-45
+**Scripture:** Luke 23:44-45, Acts 2:20
 
 > "And it was about the sixth hour, and there was a darkness over all the earth until the ninth hour. And the sun was darkened..."
+
+> "The sun shall be turned into darkness, and the moon into blood, before the great and notable day of the Lord come." - Peter at Pentecost, quoting Joel 2:31
+
+### Daytime Darkness
 
 | Detail | Value |
 |--------|-------|
@@ -95,7 +99,37 @@ Dec 2 BC     - Jupiter stationary over Bethlehem (Arrival)
 - Miraculous/supernatural
 - A dust storm (khamsin)
 - Atmospheric phenomenon
-- Lunar eclipse that evening (Acts 2:20 - "moon turned to blood")
+
+### Evening Blood Moon - The Critical Evidence
+
+| Detail | Value |
+|--------|-------|
+| **Date** | April 3, 33 AD (evening) |
+| **Time** | Moonrise (~6:20 PM) |
+| **Location** | Jerusalem |
+| **Event** | Partial lunar eclipse |
+| **Appearance** | Moon rose already in eclipse - blood red |
+
+**Key Historical Facts:**
+
+1. **Only Passover eclipse during Pilate's governorship** - Of all the Passovers from AD 26-36 (Pilate's tenure), only ONE had a lunar eclipse visible from Jerusalem: April 3, 33 AD.
+
+2. **Moon rose in eclipse** - The eclipse was already in progress when the moon rose over Jerusalem. Observers would have seen a blood-red moon rising on the eastern horizon as the crucified Christ hung on the cross.
+
+3. **Peter's Pentecost reference** - Seven weeks later, Peter quoted Joel 2:31 ("moon turned to blood") as having been fulfilled (Acts 2:16-20). He may have been referencing the literal blood moon that accompanied the crucifixion.
+
+4. **Bookended by blood** - Christ's atoning death was literally bookended by blood: His shed blood on the cross, and the blood-red moon rising that evening.
+
+### 2000-Year Parallel
+
+This creates a striking parallel with 2033:
+
+| AD 33 | AD 2033 |
+|-------|---------|
+| Blood moon on Passover | Blood moon on Passover |
+| April 3, 33 AD | April 14, 2033 |
+| Visible from Jerusalem | Visible from Jerusalem |
+| Crucifixion day | 2000th anniversary |
 
 **Stellarium Configuration:** Shows positions of Sun and Moon on this date for visualization.
 

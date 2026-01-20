@@ -197,6 +197,26 @@ show_prophetic_event("solar_eclipse_2033")
 - Acts 2:20 quotes Joel's prophecy on the day of Pentecost, 33 AD
 - A lunar eclipse occurred on the evening of April 3, 33 AD (crucifixion day)
 
+### The AD 33 Blood Moon - Critical Context
+
+The April 3, 33 AD lunar eclipse was the **only Passover lunar eclipse visible from Jerusalem during Pilate's entire governorship** (AD 26-36). Key facts:
+
+1. **Moon rose already in eclipse** - Jerusalem observers saw a blood-red moon rising on the eastern horizon as Christ hung on the cross
+2. **Peter's Pentecost sermon** - Seven weeks later, Peter quoted Joel 2:31 ("moon turned to blood") as having been **fulfilled** (Acts 2:16-20)
+3. **Bookended by blood** - Christ's atoning death was literally bookended by blood: His shed blood on the cross, and the blood-red moon rising that evening
+
+### The 2033 Parallel
+
+| AD 33 (Crucifixion) | AD 2033 (2000th Anniversary) |
+|---------------------|------------------------------|
+| Blood moon on Passover | Blood moon on Passover |
+| April 3, 33 AD | April 14, 2033 |
+| Visible from Jerusalem | **Visible from Jerusalem** |
+| Moon rose in eclipse | Total eclipse visible |
+| Peter quotes Joel 2:31 | Joel 2:31 echoed again? |
+
+If Peter was referencing the literal blood moon at the crucifixion when quoting Joel 2:31, then having another blood moon on Passover **exactly 2000 years later**, also visible from Jerusalem, is remarkable.
+
 ### Historical Pattern
 
 Blood moon tetrads on Jewish feast days have coincided with major events for Israel:
